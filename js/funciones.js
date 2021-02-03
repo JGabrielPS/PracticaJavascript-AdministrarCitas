@@ -1,4 +1,3 @@
-import Citas from "../clases/Citas.js";
 import UI from "../clases/UI.js";
 import {
   mascotaInput,
@@ -7,11 +6,11 @@ import {
   fechaInput,
   horaInput,
   sintomaInput,
-  formulario
+  formulario,
 } from "./selectores.js";
 
 export const ui = new UI();
-export let administrarCita = new Citas();
+export let DB = "";
 
 export let editado;
 
@@ -24,6 +23,17 @@ export let citasObj = {
   hora: "",
   sintomas: "",
 };
+
+export function eventListeners() {
+  mascotaInput.addEventListener("input", datosCita);
+  propietarioInput.addEventListener("input", datosCita);
+  telefonoInput.addEventListener("input", datosCita);
+  fechaInput.addEventListener("input", datosCita);
+  horaInput.addEventListener("input", datosCita);
+  sintomaInput.addEventListener("input", datosCita);
+
+  formulario.addEventListener("submit", agregarCitas);
+}
 
 export function datosCita(e) {
   citasObj[e.target.name] = e.target.value;
@@ -47,20 +57,41 @@ export function agregarCitas(e) {
   }
 
   if (editado) {
-    ui.mostrarAlerta("Editado correctamente");
-    formulario.querySelector("button[type='submit']").textContent =
-      "Crear cita";
-    administrarCita.editarCita({ ...citasObj });
-    editado = false;
+    const transaction = DB.transaction(["citas"], "readwrite");
+    const objectStore = transaction.objectStore("citas");
+    const peticion = objectStore.put(citasObj);
+
+    transaction.oncomplete = () => {
+      ui.mostrarAlerta("Editado correctamente");
+      formulario.querySelector("button[type='submit']").textContent =
+        "Crear cita";
+      editado = false;
+    };
+
+    transaction.onerror = (e) => {
+      ui.mostrarAlerta("La cita no se pudo editar", "error");
+      console.error(e);
+    };
   } else {
     citasObj.id = Date.now();
-    administrarCita.agregarCita({ ...citasObj });
-    ui.mostrarAlerta("Se agrego correctamente");
+
+    const transaction = DB.transaction(["citas"], "readwrite");
+    const objectStore = transaction.objectStore("citas");
+    const peticion = objectStore.add(citasObj);
+
+    transaction.oncomplete = () => {
+      ui.mostrarAlerta("Se agrego correctamente");
+    };
+
+    transaction.onerror = (e) => {
+      ui.mostrarAlerta("La cita no se pudo crear", "error");
+      console.error(e);
+    };
   }
 
   reiniciarObj();
 
-  ui.imprimirCitas(administrarCita);
+  ui.imprimirCitas();
 
   formulario.reset();
 }
@@ -75,11 +106,21 @@ export function reiniciarObj() {
 }
 
 export function eliminarCitas(id) {
-  administrarCita.eliminarCita(id);
+  const transaction = DB.transaction(["citas"], "readwrite");
+  const objectStore = transaction.objectStore("citas");
 
-  ui.mostrarAlerta("La cita se elimino correctamente");
+  objectStore.delete(id);
 
-  ui.imprimirCitas(administrarCita);
+  transaction.oncomplete = () => {
+    ui.mostrarAlerta("La cita se elimino correctamente");
+  };
+
+  transaction.onerror = (e) => {
+    ui.mostrarAlerta("La cita no se pudo eliminar", "error");
+    console.error(e);
+  };
+
+  ui.imprimirCitas();
 }
 
 export function cargarEdicion(cita) {
@@ -104,4 +145,39 @@ export function cargarEdicion(cita) {
     "Guardar cambios";
 
   editado = true;
+}
+
+export function crearDB() {
+  const crearDB = window.indexedDB.open("citas", 1);
+
+  crearDB.onerror = () => {
+    console.log("Error al crear la DB");
+  };
+
+  crearDB.onsuccess = () => {
+    console.log("DB creada");
+
+    DB = crearDB.result;
+
+    ui.imprimirCitas();
+  };
+
+  crearDB.onupgradeneeded = (e) => {
+    const db = e.target.result;
+
+    const objectStore = db.createObjectStore("citas", {
+      keyPath: "id",
+      autoIncrement: true,
+    });
+
+    objectStore.createIndex("mascota", "mascota", { unique: false });
+    objectStore.createIndex("propietario", "propietario", { unique: false });
+    objectStore.createIndex("telefono", "telefono", { unique: false });
+    objectStore.createIndex("fecha", "fecha", { unique: false });
+    objectStore.createIndex("hora", "hora", { unique: false });
+    objectStore.createIndex("sintomas", "sintomas", { unique: false });
+    objectStore.createIndex("id", "id", { unique: true });
+
+    console.log("DB creada y lista");
+  };
 }
