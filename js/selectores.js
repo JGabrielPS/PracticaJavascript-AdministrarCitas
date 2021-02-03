@@ -6,3 +6,4 @@ export const horaInput = document.querySelector("#hora");
 export const sintomaInput = document.querySelector("#sintomas");
 export const formulario = document.querySelector("#nueva-cita");
 export const contenedorCitas = document.querySelector("#citas");
+export const heading = document.querySelector("#administra");
